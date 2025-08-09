@@ -2,7 +2,10 @@
 <html lang="sv">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0e1430">
 <title>Femkamp – poängtavla</title>
 <style>
   :root{
@@ -15,25 +18,37 @@
     background:linear-gradient(180deg,#0a0f1f, #0e1430 60%, #0a0f1f);
     color:var(--ink);
     display:flex; flex-direction:column; gap:12px;
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
   }
   header{
-    padding:16px; position:sticky; top:0; z-index:4; backdrop-filter:saturate(120%) blur(6px);
-    background:rgba(10,15,32,.75); border-bottom:1px solid #151c39;
+    padding:12px 12px calc(8px + env(safe-area-inset-top));
+    position:sticky; top:0; z-index:4; backdrop-filter:saturate(120%) blur(6px);
+    background:rgba(10,15,32,.8); border-bottom:1px solid #151c39;
   }
   header h1{margin:0 0 8px 0; font-size:18px; letter-spacing:.4px}
-  .controls{display:flex; flex-wrap:wrap; gap:8px}
-  .controls > *{background:var(--card); border:1px solid #22306a; color:var(--ink);
-    padding:8px 10px; border-radius:10px; outline:none; font-size:14px}
+  .controls{
+    display:grid; grid-template-columns: repeat(5, max-content) 1fr;
+    gap:8px; align-items:center;
+  }
+  .controls > *{
+    background:var(--card); border:1px solid #22306a; color:var(--ink);
+    padding:10px 12px; border-radius:12px; outline:none; font-size:14px; min-height:40px;
+  }
   .controls button{cursor:pointer}
-  .controls input[type="text"]{width:170px}
-  .wrap{padding:0 16px 20px 16px; overflow:auto}
+  .controls input[type="text"]{width:220px}
+  .note{grid-column: 1 / -1; color:var(--muted); font-size:12px}
+
+  /* ====== WRAPPER + TABLE ====== */
+  .wrap{padding:0 12px 20px 12px; overflow-x:auto; -webkit-overflow-scrolling:touch}
   .table{
-    min-width:720px; border:1px solid #1a2250; border-radius:14px; overflow:hidden;
+    min-width:100%;
+    border:1px solid #1a2250; border-radius:14px; overflow:hidden;
     box-shadow:0 10px 30px rgba(0,0,0,.3);
   }
   table{width:100%; border-collapse:separate; border-spacing:0; background:var(--card)}
-  thead th{position:sticky; top:64px; z-index:3; background:linear-gradient(180deg,#121b39,#0f1731);
-    border-bottom:1px solid #1a2250}
+  thead th{position:sticky; top:calc(60px + env(safe-area-inset-top)); z-index:3;
+    background:linear-gradient(180deg,#121b39,#0f1731); border-bottom:1px solid #1a2250}
   th, td{
     border-right:1px solid var(--grid); border-bottom:1px solid var(--grid);
     padding:0; text-align:center; vertical-align:middle;
@@ -43,64 +58,61 @@
     position:sticky; left:0; z-index:2; background:linear-gradient(180deg,#121b39,#0f1731);
     padding:6px 8px; text-align:left; font-weight:600;
   }
-  tbody th .rowMeta{display:flex; gap:6px; align-items:center}
+  tbody th .rowMeta{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
   .mode{
     appearance:none; background:#0e1530; color:#cfe0ff; border:1px solid #23336e;
-    padding:4px 8px; border-radius:8px; font-size:12px; cursor:pointer;
+    padding:6px 8px; border-radius:10px; font-size:12px; cursor:pointer;
   }
   .name-input{
     background:#0e1530; border:1px solid #23336e; color:#e6ecff;
-    padding:6px 8px; border-radius:8px; width:120px;
+    padding:8px 10px; border-radius:10px; width:140px;
   }
+  .small{font-size:12px; color:#a9b7e6}
+  .ghost{opacity:.7}
+
   .cell{
-    position:relative; height:64px; min-width:88px; cursor:pointer; user-select:none;
+    position:relative; height:60px; min-width:68px; cursor:pointer; user-select:none;
     background:
       linear-gradient(135deg, transparent 49.5%, #1b244a 50%, #1b244a 50.5%, transparent 51%),
       linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
   }
   .cell:hover{outline:2px solid #33418a; outline-offset:-2px}
-  .cell{
-  position:relative; height:64px; min-width:88px; cursor:pointer; user-select:none;
-  background:
-    linear-gradient(135deg, transparent 49.5%, #1b244a 50%, #1b244a 50.5%, transparent 51%),
-    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
-}
 
-/* Gemensamt för båda trianglarna */
-.tri{
-  position:absolute; inset:0; display:flex; font-weight:700; 
-  font-variant-numeric:tabular-nums; pointer-events:none;  /* så att klick alltid träffar cellen */
-}
-
-/* Vänster-upp: resultat */
-.tri.score{
-  clip-path:polygon(0 0, 100% 0, 0 100%);
-  justify-content:flex-start;      /* vänster */
-  align-items:flex-start;          /* upp */
-  padding:6px 8px;                 /* luft från kanter */
-  color:#eaf1ff; 
-  font-size:18px;
-}
-
-/* Höger-ned: placeringspoäng */
-.tri.rank{
-  clip-path:polygon(100% 0, 100% 100%, 0 100%);
-  justify-content:flex-end;        /* höger */
-  align-items:flex-end;            /* ned */
-  padding:6px 8px;
-  color:#89c2ff;
-  font-size:16px;
-}
-
-/* Valfritt: svagare när cellen saknar värde */
-.cell.empty .tri{ opacity:.25 }
+  /* trianglarna – förankrade i hörn */
+  .tri{ position:absolute; inset:0; display:flex; font-weight:700;
+        font-variant-numeric:tabular-nums; pointer-events:none; }
+  .tri.score{
+    clip-path:polygon(0 0, 100% 0, 0 100%);
+    justify-content:flex-start; align-items:flex-start;
+    padding:6px 8px; color:#eaf1ff; font-size:18px;
+  }
+  .tri.rank{
+    clip-path:polygon(100% 0, 100% 100%, 0 100%);
+    justify-content:flex-end; align-items:flex-end;
+    padding:6px 8px; color:#89c2ff; font-size:16px;
+  }
   .cell.empty .tri{opacity:.25}
+
   tfoot td, tfoot th{background:#0e1530; position:sticky; bottom:0; z-index:2}
   tfoot td.total{font-size:18px; font-weight:800; color:#eaf1ff}
-  .note{color:var(--muted); font-size:12px; margin-top:6px}
-  .ghost{opacity:.6}
-  .small{font-size:12px; color:#a9b7e6}
-  .icon{font-weight:900}
+
+  /* ====== RESPONSIVE ====== */
+  @media (max-width: 900px){
+    .controls{grid-template-columns: 1fr 1fr; gap:8px}
+    .controls > *{width:100%}
+    #renameSet{grid-column: span 2}
+    .note{grid-column: 1 / -1}
+    .name-input{width:120px}
+  }
+  @media (max-width: 600px){
+    header h1{font-size:16px}
+    .name-input{width:clamp(84px, 32vw, 110px); font-size:13px; padding:6px 8px}
+    .mode{font-size:12px; padding:5px 8px}
+    .cell{height:52px; min-width:56px}
+    .tri.score{font-size:16px; padding:4px 6px}
+    .tri.rank{font-size:14px; padding:4px 6px}
+    thead th, tfoot th, tfoot td{padding:8px 6px}
+  }
 </style>
 </head>
 <body>
@@ -125,8 +137,8 @@
 /* -------------------- Data Model -------------------- */
 const state = {
   title: "Femkamp",
-  players: ["P","B","S","F","V"],            // kolumnnamn (redigerbara)
-  events: [                                  // varje gren har namn, mode, scores[]
+  players: ["P","B","S","F","V"],
+  events: [
     { name:"Gren 1", mode:"max", scores:Array(5).fill(null) },
     { name:"Gren 2", mode:"max", scores:Array(5).fill(null) },
     { name:"Gren 3", mode:"max", scores:Array(5).fill(null) },
@@ -134,36 +146,29 @@ const state = {
 };
 
 /* -------------------- Utilities -------------------- */
-// Beräkna placeringspoäng för en gren. Tied players får medelvärdet av de poäng deras platser motsvarar.
 function rankPoints(event, playerCount){
   const N = playerCount;
   const vals = event.scores.map((v,i)=>({i, v}));
   const present = vals.filter(x => typeof x.v === 'number' && !Number.isNaN(x.v));
   if (present.length === 0) return Array(N).fill(null);
 
-  // sortera beroende på mode
   present.sort((a,b) => event.mode === 'min' ? a.v - b.v : b.v - a.v);
 
   const pts = Array(N).fill(null);
-  let r = 0; // 0-baserad rankindex
+  let r = 0;
   while (r < present.length){
-    // hitta alla med samma värde (tie-grupp)
     let s = r+1;
     while (s < present.length && present[s].v === present[r].v) s++;
     const size = s - r;
-
-    // poäng för platser r..s-1 är (N-r), (N-(r+1)), ...
     let sum = 0;
     for (let k=0;k<size;k++) sum += (N - (r+k));
     const avg = sum / size;
-
     for (let k=r;k<s;k++) pts[present[k].i] = avg;
     r = s;
   }
   return pts;
 }
 const fmt = (x) => (x==null || Number.isNaN(x)) ? "" : (Number.isInteger(x) ? x : (+x.toFixed(1)));
-const sum = arr => arr.reduce((a,b)=>a+(typeof b==='number'&&!Number.isNaN(b)?b:0),0);
 
 /* -------------------- Rendering -------------------- */
 const el = (tag, attrs={}, ...children) => {
@@ -185,9 +190,9 @@ function render(){
 
   const playerCount = state.players.length;
 
-  // ---- HEAD
+  // THEAD
   const thead = el('thead'); const hr = el('tr');
-  hr.append(el('th', {}, "")); // tom hörncell
+  hr.append(el('th', {}, "")); // hörncell
   state.players.forEach((name,pi)=>{
     const nameInput = el('input', {
       class:'name-input', value:name,
@@ -197,12 +202,11 @@ function render(){
   });
   thead.append(hr);
 
-  // ---- BODY
+  // TBODY
   const tbody = el('tbody');
   state.events.forEach((ev,ri)=>{
     const tr = el('tr');
 
-    // radhuvud: namn + mode
     const nameInput = el('input', {
       class:'name-input', value:ev.name,
       oninput:e=>{ ev.name = e.target.value; }
@@ -218,26 +222,19 @@ function render(){
     const removeBtn = el('button', {class:'ghost small', onclick:()=>{
       state.events.splice(ri,1); render();
     }}, "Ta bort");
-    const head = el('th',{},
-      el('div', {class:'rowMeta'}, nameInput, modeSel, removeBtn)
-    );
+    const head = el('th',{}, el('div', {class:'rowMeta'}, nameInput, modeSel, removeBtn));
     tr.append(head);
 
-    // celler
     const pts = rankPoints(ev, playerCount);
     for (let pi=0; pi<playerCount; pi++){
       const score = ev.scores[pi];
       const cell = el('td', {});
       const clickable = el('div', {class:'cell' + (score==null?' empty':''), onclick:()=>{
           const val = prompt(`${ev.name} – poäng för ${state.players[pi]}:`, score ?? "");
-          if (val === null) return; // avbryt
-          const num = Number(val.replace(",", "."));
-          if (!Number.isFinite(num)){
-            alert("Ange ett tal, tack.");
-            return;
-          }
-          ev.scores[pi] = num;
-          render();
+          if (val === null) return;
+          const num = Number(String(val).replace(",", "."));
+          if (!Number.isFinite(num)){ alert("Ange ett tal, tack."); return; }
+          ev.scores[pi] = num; render();
         }});
       clickable.append(
         el('div', {class:'tri score', title:'Resultat'}, fmt(score)),
@@ -249,7 +246,7 @@ function render(){
     tbody.append(tr);
   });
 
-  // ---- FOOT (summa)
+  // TFOOT totalsumma
   const tfoot = el('tfoot');
   const fr = el('tr');
   fr.append(el('th',{}, "Total placeringspoäng"));
