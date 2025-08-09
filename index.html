@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Femkamp – poängtavla</title>
+<style>
+  :root{
+    --bg:#0b1020; --card:#111831; --muted:#7f8ab3; --ink:#e9edff; --accent:#6aa9ff; --grid:#1b2445;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background:linear-gradient(180deg,#0a0f1f, #0e1430 60%, #0a0f1f);
+    color:var(--ink);
+    display:flex; flex-direction:column; gap:12px;
+  }
+  header{
+    padding:16px; position:sticky; top:0; z-index:4; backdrop-filter:saturate(120%) blur(6px);
+    background:rgba(10,15,32,.75); border-bottom:1px solid #151c39;
+  }
+  header h1{margin:0 0 8px 0; font-size:18px; letter-spacing:.4px}
+  .controls{display:flex; flex-wrap:wrap; gap:8px}
+  .controls > *{background:var(--card); border:1px solid #22306a; color:var(--ink);
+    padding:8px 10px; border-radius:10px; outline:none; font-size:14px}
+  .controls button{cursor:pointer}
+  .controls input[type="text"]{width:170px}
+  .wrap{padding:0 16px 20px 16px; overflow:auto}
+  .table{
+    min-width:720px; border:1px solid #1a2250; border-radius:14px; overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.3);
+  }
+  table{width:100%; border-collapse:separate; border-spacing:0; background:var(--card)}
+  thead th{position:sticky; top:64px; z-index:3; background:linear-gradient(180deg,#121b39,#0f1731);
+    border-bottom:1px solid #1a2250}
+  th, td{
+    border-right:1px solid var(--grid); border-bottom:1px solid var(--grid);
+    padding:0; text-align:center; vertical-align:middle;
+  }
+  thead th, tfoot th, tfoot td{padding:10px 8px; font-weight:600; color:#cfe0ff}
+  tbody th{
+    position:sticky; left:0; z-index:2; background:linear-gradient(180deg,#121b39,#0f1731);
+    padding:6px 8px; text-align:left; font-weight:600;
+  }
+  tbody th .rowMeta{display:flex; gap:6px; align-items:center}
+  .mode{
+    appearance:none; background:#0e1530; color:#cfe0ff; border:1px solid #23336e;
+    padding:4px 8px; border-radius:8px; font-size:12px; cursor:pointer;
+  }
+  .name-input{
+    background:#0e1530; border:1px solid #23336e; color:#e6ecff;
+    padding:6px 8px; border-radius:8px; width:120px;
+  }
+  .cell{
+    position:relative; height:64px; min-width:88px; cursor:pointer; user-select:none;
+    background:
+      linear-gradient(135deg, transparent 49.5%, #1b244a 50%, #1b244a 50.5%, transparent 51%),
+      linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+  }
+  .cell:hover{outline:2px solid #33418a; outline-offset:-2px}
+  .cell{
+  position:relative; height:64px; min-width:88px; cursor:pointer; user-select:none;
+  background:
+    linear-gradient(135deg, transparent 49.5%, #1b244a 50%, #1b244a 50.5%, transparent 51%),
+    linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+}
+
+/* Gemensamt för båda trianglarna */
+.tri{
+  position:absolute; inset:0; display:flex; font-weight:700; 
+  font-variant-numeric:tabular-nums; pointer-events:none;  /* så att klick alltid träffar cellen */
+}
+
+/* Vänster-upp: resultat */
+.tri.score{
+  clip-path:polygon(0 0, 100% 0, 0 100%);
+  justify-content:flex-start;      /* vänster */
+  align-items:flex-start;          /* upp */
+  padding:6px 8px;                 /* luft från kanter */
+  color:#eaf1ff; 
+  font-size:18px;
+}
+
+/* Höger-ned: placeringspoäng */
+.tri.rank{
+  clip-path:polygon(100% 0, 100% 100%, 0 100%);
+  justify-content:flex-end;        /* höger */
+  align-items:flex-end;            /* ned */
+  padding:6px 8px;
+  color:#89c2ff;
+  font-size:16px;
+}
+
+/* Valfritt: svagare när cellen saknar värde */
+.cell.empty .tri{ opacity:.25 }
+  .cell.empty .tri{opacity:.25}
+  tfoot td, tfoot th{background:#0e1530; position:sticky; bottom:0; z-index:2}
+  tfoot td.total{font-size:18px; font-weight:800; color:#eaf1ff}
+  .note{color:var(--muted); font-size:12px; margin-top:6px}
+  .ghost{opacity:.6}
+  .small{font-size:12px; color:#a9b7e6}
+  .icon{font-weight:900}
+</style>
+</head>
+<body>
+  <header>
+    <h1>Femkamp – poängtavla</h1>
+    <div class="controls">
+      <button id="addPlayer">+ Lägg till spelare</button>
+      <button id="addEvent">+ Lägg till gren</button>
+      <button id="resetScores" class="ghost">Nollställ resultat</button>
+      <input id="renameSet" class="ghost" type="text" placeholder="Döp tävlingen (valfritt)" />
+      <span class="note">Tips: klicka i en ruta för att mata in poäng. Vänster triangel = resultat, höger = placeringspoäng.</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="table">
+      <table id="board"></table>
+    </div>
+  </div>
+
+<script>
+/* -------------------- Data Model -------------------- */
+const state = {
+  title: "Femkamp",
+  players: ["P","B","S","F","V"],            // kolumnnamn (redigerbara)
+  events: [                                  // varje gren har namn, mode, scores[]
+    { name:"Gren 1", mode:"max", scores:Array(5).fill(null) },
+    { name:"Gren 2", mode:"max", scores:Array(5).fill(null) },
+    { name:"Gren 3", mode:"max", scores:Array(5).fill(null) },
+  ]
+};
+
+/* -------------------- Utilities -------------------- */
+// Beräkna placeringspoäng för en gren. Tied players får medelvärdet av de poäng deras platser motsvarar.
+function rankPoints(event, playerCount){
+  const N = playerCount;
+  const vals = event.scores.map((v,i)=>({i, v}));
+  const present = vals.filter(x => typeof x.v === 'number' && !Number.isNaN(x.v));
+  if (present.length === 0) return Array(N).fill(null);
+
+  // sortera beroende på mode
+  present.sort((a,b) => event.mode === 'min' ? a.v - b.v : b.v - a.v);
+
+  const pts = Array(N).fill(null);
+  let r = 0; // 0-baserad rankindex
+  while (r < present.length){
+    // hitta alla med samma värde (tie-grupp)
+    let s = r+1;
+    while (s < present.length && present[s].v === present[r].v) s++;
+    const size = s - r;
+
+    // poäng för platser r..s-1 är (N-r), (N-(r+1)), ...
+    let sum = 0;
+    for (let k=0;k<size;k++) sum += (N - (r+k));
+    const avg = sum / size;
+
+    for (let k=r;k<s;k++) pts[present[k].i] = avg;
+    r = s;
+  }
+  return pts;
+}
+const fmt = (x) => (x==null || Number.isNaN(x)) ? "" : (Number.isInteger(x) ? x : (+x.toFixed(1)));
+const sum = arr => arr.reduce((a,b)=>a+(typeof b==='number'&&!Number.isNaN(b)?b:0),0);
+
+/* -------------------- Rendering -------------------- */
+const el = (tag, attrs={}, ...children) => {
+  const n = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)){
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k.startsWith('on') && typeof v === 'function') n.addEventListener(k.substring(2), v);
+    else n.setAttribute(k, v);
+  }
+  for (const c of children) n.append(c);
+  return n;
+};
+
+function render(){
+  document.title = state.title || "Femkamp – poängtavla";
+  const board = document.getElementById('board');
+  board.innerHTML = "";
+
+  const playerCount = state.players.length;
+
+  // ---- HEAD
+  const thead = el('thead'); const hr = el('tr');
+  hr.append(el('th', {}, "")); // tom hörncell
+  state.players.forEach((name,pi)=>{
+    const nameInput = el('input', {
+      class:'name-input', value:name,
+      oninput: e=>{ state.players[pi] = e.target.value; }
+    });
+    hr.append(el('th',{}, nameInput));
+  });
+  thead.append(hr);
+
+  // ---- BODY
+  const tbody = el('tbody');
+  state.events.forEach((ev,ri)=>{
+    const tr = el('tr');
+
+    // radhuvud: namn + mode
+    const nameInput = el('input', {
+      class:'name-input', value:ev.name,
+      oninput:e=>{ ev.name = e.target.value; }
+    });
+    const modeSel = el('select', {
+      class:'mode',
+      onchange:e=>{ ev.mode = e.target.value; render(); }
+    },
+      el('option', {value:'max'}, 'Flest vinner'),
+      el('option', {value:'min'}, 'Minst vinner')
+    );
+    modeSel.value = ev.mode;
+    const removeBtn = el('button', {class:'ghost small', onclick:()=>{
+      state.events.splice(ri,1); render();
+    }}, "Ta bort");
+    const head = el('th',{},
+      el('div', {class:'rowMeta'}, nameInput, modeSel, removeBtn)
+    );
+    tr.append(head);
+
+    // celler
+    const pts = rankPoints(ev, playerCount);
+    for (let pi=0; pi<playerCount; pi++){
+      const score = ev.scores[pi];
+      const cell = el('td', {});
+      const clickable = el('div', {class:'cell' + (score==null?' empty':''), onclick:()=>{
+          const val = prompt(`${ev.name} – poäng för ${state.players[pi]}:`, score ?? "");
+          if (val === null) return; // avbryt
+          const num = Number(val.replace(",", "."));
+          if (!Number.isFinite(num)){
+            alert("Ange ett tal, tack.");
+            return;
+          }
+          ev.scores[pi] = num;
+          render();
+        }});
+      clickable.append(
+        el('div', {class:'tri score', title:'Resultat'}, fmt(score)),
+        el('div', {class:'tri rank', title:'Placeringspoäng'}, fmt(pts[pi]))
+      );
+      cell.append(clickable);
+      tr.append(cell);
+    }
+    tbody.append(tr);
+  });
+
+  // ---- FOOT (summa)
+  const tfoot = el('tfoot');
+  const fr = el('tr');
+  fr.append(el('th',{}, "Total placeringspoäng"));
+  const totals = new Array(playerCount).fill(0);
+  state.events.forEach(ev=>{
+    const rp = rankPoints(ev, playerCount);
+    rp.forEach((p,i)=>{ if (typeof p==='number') totals[i]+=p; });
+  });
+  totals.forEach(t => fr.append(el('td', {class:'total'}, fmt(t))));
+  tfoot.append(fr);
+
+  board.append(thead, tbody, tfoot);
+}
+
+/* -------------------- Controls -------------------- */
+document.getElementById('addPlayer').addEventListener('click', ()=>{
+  const next = `Spelare ${state.players.length+1}`;
+  state.players.push(next);
+  state.events.forEach(ev=>ev.scores.push(null));
+  render();
+});
+document.getElementById('addEvent').addEventListener('click', ()=>{
+  state.events.push({name:`Gren ${state.events.length+1}`, mode:'max', scores:Array(state.players.length).fill(null)});
+  render();
+});
+document.getElementById('resetScores').addEventListener('click', ()=>{
+  if (!confirm("Nollställa alla resultat?")) return;
+  state.events.forEach(ev=>ev.scores.fill(null));
+  render();
+});
+document.getElementById('renameSet').addEventListener('input', (e)=>{
+  state.title = e.target.value;
+});
+
+// Init
+render();
+</script>
+</body>
+</html>
